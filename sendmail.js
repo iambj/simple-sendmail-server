@@ -20,6 +20,7 @@ module.exports = class SendMail {
 
         console.log("Mail sent:")
         console.log(data)
+        return true;
     }
 
     sendReal(data) {
