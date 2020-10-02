@@ -1,5 +1,13 @@
+/*
+    TODO: 
+        - more verbose error messages returned on the API (i.e sending failed because of invalidation) 
+        - Support for loading multiple validation schemas
+
+*/
+
 const http = require("http");
 const URL = require("url").URL;
+const path = require("path");
 const chalk = require("chalk");
 const queryString = require("querystring");
 
@@ -13,8 +21,25 @@ const HOST = "localhost";
 const PORT = 3000;
 const PROTOCOL = "http";
 
+// Load from config
+/* 
+?   A path like this will work while using __dirname
+?   but maybe an absolute path would work best.
+?   This is rigid as the path in the config completely
+?   is dependent on 1. where you place the schema,
+?   .2 the type of path you use.
+?   As of now, the folder with validation schemas must
+?   reside in the root directory of the app and where it
+*/
+const validationPaths = {
+    basic: "validation/basic.js",
+    phone: "validation/phone.js",
+    broken: "validation/b.js",
+};
+
 // Chalk:
 const error = chalk.bold.red;
+const info = chalk.blue;
 
 const mail = new SendMail();
 
@@ -55,24 +80,22 @@ const server = http.createServer((req, res) => {
                 console.log(
                     chalk`{blue ---- JSON data received successfully. ----}`
                 );
+                // TODO: JSON next - collect body data then move on to sending
                 res.end(
                     `${JSON.stringify({
                         status: 200,
                     })}`
                 );
-                return;
+                return; //! <-- <--
             } catch (e) {
                 console.log(chalk.red("---- Ill formed JSON received. ----"));
             }
             // JSON couldn't be parsed, try to convert form data to an object, then JSON to send.
             console.log(chalk`{blue ---- Trying regular form data... ----}`);
             body = { ...queryString.parse(body) }; // Doesn't return a normal object so we spread it. Odd, but OK...
-
             // Attempt to send mail
-
             // Also validate all fields were sent
-            // name, pet name, email address, phone, message
-            if (!body) {
+            if (!body || Object.keys(body).length < 1) {
                 console.log(error`---- No data received. ----`);
                 if (!sent) {
                     res.end(
@@ -85,14 +108,15 @@ const server = http.createServer((req, res) => {
                     return;
                 }
             }
-            if (body.required) {
+            if (body) {
                 validData = validateBody(body);
             }
-            console.log(validData);
+            // console.log(validData);
             if (body && validData) {
                 sent = mail.send(body);
             }
             if (!sent) {
+                console.log(error`---- Can't send mail. Fatal error. ----`);
                 res.end(
                     `${JSON.stringify({
                         msg: "There was an issue sending mail.",
@@ -147,15 +171,57 @@ server.listen(PORT, HOST, () => {
 });
 
 // Mail validations (all required fields)
+// const dataScheme
 
 function validateBody(data) {
-    console.log("Validating data ----");
-    console.log(data);
-    let requiredFields = data.required.split(",");
-    console.log(requiredFields);
-    return requiredFields.every(
-        (field) => data.hasOwnProperty(field) && data[field] !== ""
-    );
+    // TODO: strip whitespace
+    console.log(chalk`{yellow ---- Begin Validating data ----}`);
+    // console.log(data);
+    // If a validation schema was sent with the form
+    if (data.validation) {
+        // Get name passed from the form
+        // This should match with one in the config.
+        let validationName = data.validation;
+
+        if (validationPaths[validationName]) {
+            let validation;
+            try {
+                joi = require(path.resolve(
+                    __dirname,
+                    validationPaths[validationName]
+                ));
+            } catch (e) {
+                console.log(
+                    error`---- Can't load schema for ${validationPaths[validationName]}`
+                );
+                return false;
+            }
+            // console.log(validation);
+            console.log(
+                info`---- Validate using "${validationName}" schema. ----`
+            );
+            let validate = joi.validate(data);
+            if (validate.error) {
+                console.log(error`---- Joi validation failed. ----`);
+                console.log(validate);
+                return false;
+            }
+        } else {
+            console.log(error`---- Unknown schema requested ----`);
+            return false;
+        }
+    }
+    // console.log("data", data);
+
+    // If there is a required property, otherwise skip checking for required fields from submitted data
+    if (data.required) {
+        let requiredFields = data.required.split(",");
+        console.log("requiredFields", requiredFields);
+        return requiredFields.every(
+            (field) => data.hasOwnProperty(field) && data[field] !== ""
+        );
+    }
+    return true;
 }
 
 // Logging

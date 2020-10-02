@@ -1,5 +1,5 @@
 const nodemailer = require("nodemailer");
-let chalk = require("chalk")
+let chalk = require("chalk");
 
 // If chalk is a dev dependency, we can overwrite the tagged template literal format.
 // chalk = function(text){return text[0]};
@@ -14,12 +14,9 @@ module.exports = class SendMail {
         });
     }
 
-    send(data){
-
-
-
-        console.log("Mail sent:")
-        console.log(data)
+    send(data) {
+        console.log(chalk`{green.bold ---- Mail sent. ----}`);
+        // console.log(data)
         return true;
     }
 

@@ -1,5 +1,8 @@
 {
     "port": "3000",
     "method": "http",
-    "fromAddress": "mail@pettinontheritz.com"
+    "fromAddress": "mail@pettinontheritz.com",
+    "validation": {
+        "basic": "validation/basic.js"
+    }
 }
