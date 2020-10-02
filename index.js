@@ -13,6 +13,9 @@ const queryString = require("querystring");
 
 let SendMail = require("./sendmail");
 // spam
+// may be able to use the Set functions from ExecuteSoftware
+// the intersect ones
+
 // bad words
 
 // Configurations
@@ -54,7 +57,7 @@ const server = http.createServer((req, res) => {
 
     let curURL = new URL(req.url, baseURL);
 
-    // console.log(curURL);
+    // console.log(curURL.search);
 
     // NOTE: time is sent as 24 hour format. ("00:00") as string
     //       date is sent in reverse orders ("1990-07-15") as string
@@ -173,11 +176,16 @@ server.listen(PORT, HOST, () => {
 // Mail validations (all required fields)
 // const dataScheme
 
-function validateBody(data) {
+function validateBody(rawData) {
     // TODO: strip whitespace
     console.log(chalk`{yellow ---- Begin Validating data ----}`);
-    // console.log(data);
     // If a validation schema was sent with the form
+    let data = {};
+    for (const [key, val] of Object.entries(rawData)) {
+        data[key] = val.trim();
+    }
+
+    console.log(data);
     if (data.validation) {
         // Get name passed from the form
         // This should match with one in the config.
