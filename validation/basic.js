@@ -6,10 +6,10 @@ const Joi = require("joi");
 // TODO: load schema from config
 
 const basicSchema = Joi.object({
-    name: Joi.string().min(2).pattern(new RegExp("^[a-zA-Z]*")).required(),
+    name: Joi.string().min(2).pattern(new RegExp("^[a-zA-Z]*$")).required(),
     phone: Joi.string()
-        .min(12)
-        .pattern(new RegExp("^[0-9]{3}-[0-9]{3}-[0-9]{4}")),
+        .min(10)
+        .pattern(new RegExp("^[(]?[0-9]{3}[)]?-?[0-9]{3}-?[0-9]{4}")),
 
     email: Joi.string()
         .email({
