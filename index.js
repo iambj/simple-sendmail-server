@@ -10,18 +10,19 @@ const URL = require("url").URL;
 const path = require("path");
 const chalk = require("chalk");
 const queryString = require("querystring");
+const config = require("config");
 
 let SendMail = require("./sendmail");
 // spam
-// may be able to use the Set functions from ExecuteSoftware
+// may be able to use the Set functions from ExecuteProgram
 // the intersect ones
 
 // bad words
 
 // Configurations
 
-const HOST = "localhost";
-const PORT = 3000;
+const HOST = config.get("host");
+const PORT = config.get("port");
 const PROTOCOL = "http";
 
 // Load from config
@@ -48,7 +49,12 @@ const mail = new SendMail();
 
 // Start a server
 
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
+    // Build an object of useful info to pass along to modules.
+    const reqInfo = {
+        clientIP:
+            req.headers["x-forwarded-for"] || req.connection.remoteAddress,
+    };
     // console.dir(req);
     let baseURL = `${PROTOCOL}://${req.headers.host}/${
         req.params ? req.params : ""
@@ -62,7 +68,66 @@ const server = http.createServer((req, res) => {
     // NOTE: time is sent as 24 hour format. ("00:00") as string
     //       date is sent in reverse orders ("1990-07-15") as string
 
-    if (curURL.pathname === "/sendmail" && req.method === "POST") {
+    if (curURL.pathname === "/build" && req.method === "POST") {
+        let body = "";
+        let sent = false;
+        let validData = true; // Start true because the form can omit the required field. If so, no validation is needed here.
+        req.on("data", (chunk) => {
+            // console.log(chunk.toString());
+            body += chunk.toString();
+        });
+        req.on("end", async () => {
+            res.setHeader("Content-Type", "application/JSON");
+            console.log(chalk`{blue ---- Trying regular form data... ----}`);
+            body = { ...queryString.parse(body) }; // Doesn't return a normal object so we spread it. Odd, but OK...
+            // Attempt to send mail
+            // Also validate all fields were sent
+            if (!body || Object.keys(body).length < 1) {
+                console.log(error`---- No data received. ----`);
+                if (!sent) {
+                    res.end(
+                        `${JSON.stringify({
+                            msg:
+                                "There was an issue with your request to send mail.",
+                            status: 400,
+                        })}`
+                    );
+                    return;
+                }
+            }
+            // TODO: Default to some kind of validation, like basic.
+
+            // if (body) {
+            //     validData = validateBody(body);
+            // }
+            // console.log(validData);
+            // if (body && validData) {
+            sent = await mail.buildEmail(body, reqInfo);
+            console.log({ sent });
+            // }
+            if (!sent) {
+                console.log(error`---- Can't send mail. Fatal error. ----`);
+                res.end(
+                    `${JSON.stringify({
+                        msg: "There was an issue sending mail.",
+                        // err: sent.err,
+                        status: 500,
+                    })}`
+                );
+                return;
+
+                // Finally send mail
+            } else {
+                res.end(
+                    `${JSON.stringify({
+                        msg: "Email sent.",
+                        status: 200,
+                    })}`
+                );
+                return;
+            }
+        });
+    } else if (curURL.pathname === "/sendmail" && req.method === "POST") {
         let body = "";
         let sent = false;
         let validData = true; // Start true because the form can omit the required field. If so, no validation is needed here.
@@ -111,6 +176,8 @@ const server = http.createServer((req, res) => {
                     return;
                 }
             }
+            // TODO: Default to some kind of validation, like basic.
+
             if (body) {
                 validData = validateBody(body);
             }
@@ -152,6 +219,8 @@ const server = http.createServer((req, res) => {
         return;
     } else {
         // 404
+        console.log("404");
+
         res.setHeader("Content-Type", "application/JSON");
         res.end(
             `${JSON.stringify({
