@@ -9,9 +9,8 @@
         "basic": "validation/basic.js"
     },
     "useSpamCheck": true,
-    "logSpamMessages": true,
-    "spamLogLocation" : "./logs/spam",
+    "saveSpamMessages": true,
+    "spamLogLocation": "./logs/spam",
     "useLanguageFilter": false,
     "useThrottleBan": true
-    
 }

@@ -37,12 +37,13 @@ module.exports = class SendMail {
     sendReal(message) {
         console.log("sending mail...", message);
         this.transporter.sendMail(
-            {
-                from: "website@pettinontheritz.com",
-                to: "iambj@icloud.com",
-                subject: "Test Email From Node",
-                text: "This is so going into the junk mail",
-            },
+            message,
+            // {
+            //     from: "website@pettinontheritz.com",
+            //     to: "iambj@icloud.com",
+            //     subject: "Test Email From Node",
+            //     text: "This is so going into the junk mail",
+            // },
             (err, info) => {
                 console.log(info.envelope);
                 console.log(info.messageId);
@@ -81,9 +82,10 @@ module.exports = class SendMail {
             text: "This is a message " + this.buildTextVersion(data),
             html: this.buildHTMLVersion(data),
         };
+        let mail = new MailComposer(options);
+        let isSpam = false;
 
         if (config.get("useSpamCheck")) {
-            let mail = new MailComposer(options);
             let stream = mail.compile().createReadStream();
             let fileName = "./testMail/" + Date.now() + "_mail.txt";
             let message = fs.createWriteStream(fileName);
@@ -91,40 +93,49 @@ module.exports = class SendMail {
             // exec(`sa-learn --spam < ${fileName}`, (err, stdout, stderr) => {
 
             // Check message for spam
-            let result = await this.checkForSpam(fileName, reqInfo);
-
-            // Flip boolean for now because "true" means spam was found, whereas this returns to something that needs false to continue on.
-            return !result;
+            isSpam = await this.checkForSpam(fileName, reqInfo);
         }
+
         // Not checking for spam, send on build message to transport
-        else {
-            console.log({ options });
-            return options;
+        // console.log({ options });
+        if (!isSpam) {
+            this.sendReal(options);
+            return true;
+        } else {
+            return false;
         }
     }
     async checkForSpam(fileName, reqInfo) {
         /** Compile an email to just send, save as a file for spam reasons.
-         * @param {string} fileName  The information being submitted, usual from a form, that will be sent in the body of the email.
+         * @param {string} fileName  The information being submitted, usual from a form, that will be sent in the body of the email. It os then resolved to an absolute path.
          * @param {object} reqInfo Information from the server about the request. It is used for logging the IP for spam purposes here.
          * @return {boolean} True if spam is detected by spamassassin
          */
-        fileName = "./testMail/spam.txt";
+        // fileName = "./testMail/spam.txt";
+        // fileName = resolve(fileName);
         console.log("checkForSpam, filename", fileName);
+        let spam = false;
+
+        // TODO: check if file exists
         //? -e exits spamassassin if spam is found. this is used to kill the process of sending an email and trigger the catch() on the promise
         const { stdout = "empty", stderr } = await execPromise(
-            `spamassassin -e < ${resolve(fileName)}`
+            `spamassassin -e < ${fileName}`
         ).catch((e) => {
             // We have spam!
-            console.log("Error?", e.stdout);
-            if (config.get("logSpamMessages")) {
-                console.log("saving spam email for later.");
-            }
-            console.log("Logging spam result from SA");
-            return true;
+            spam = true;
+            // console.log("Error?", e.stdout);
+            // LOGTHIS "e" to winston
+            console.log("Logging spam result from SA", reqInfo.clientIP);
+            return e;
         });
-        // console.log("stdout::", stdout); //^ SA shows the email if no spam.
-        // console.log("stderr", stderr); //^ Empty is no spam is found.
 
+        // Should we hold onto spam for analysis?
+        if (!spam || !config.get("saveSpamMessages")) {
+            fs.unlink(fileName, (err) => {
+                console.log("deleting non spam email");
+            });
+        }
+        if (spam) return true;
         return false;
     }
 };
