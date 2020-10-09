@@ -17,6 +17,13 @@ let chalk = require("chalk");
 
 // Remember: bogofilter
 
+/**
+ * Module for all things sending mail. Builds emails, then sends them. Also checks for spam with spamassassin.
+ * Also provides functions for building text and html versions of the body of an email.
+ *
+ *@version 0.0.1
+ */
+
 module.exports = class SendMail {
     constructor() {
         console.log(chalk`{bold.white.bgBlue ----Sendmail loaded----}`);
@@ -86,6 +93,7 @@ module.exports = class SendMail {
         let isSpam = false;
 
         if (config.get("useSpamCheck")) {
+            // TODO: maybe move this out to check for spam as it is the only place it is used. When spam check is off, mail is composed from the options.
             let stream = mail.compile().createReadStream();
             let fileName = "./testMail/" + Date.now() + "_mail.txt";
             let message = fs.createWriteStream(fileName);
