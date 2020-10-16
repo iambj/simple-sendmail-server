@@ -24,6 +24,31 @@ This will be an open endpoint to send mail. Will need to make sure it's a real f
 -   Templating system for the email
     -   Could replace text inside an html doc with a table on it.
 
-### Using the server
+## Using the server
 
 This server is meant to be used inside of a closed network behind a firewall or behind a reverse proxy such as nginx. It does not implement the use of SSL or any transport layer security. The simplest use would be to allow your edge server to terminate any SSL connections and proxy the request to this mail server.
+
+## Building your form
+
+For email to be sent and validated correctly certain hidden fields need to be set. Validation should of course be done on at the very least server side and preferably also on the front end for a better experience for the user. Simple Sendmail Server (SSS) will do basic validation if you provide these hidden fields. If invalid input is detected, sending will fail and send back an error. SSS was created for a simple website with no backend (such as Node or PHP) so simple validation was built in.
+
+To denote fields that are required:
+
+```html
+<input type="hidden" name="required" value="(fields names)">
+```
+
+`value`  should be a comma separated list with no spaces of names that match the names of the form elements that need to be validated.  For example,
+
+```html
+<input id="name" name="name" type="text">
+<input id="email" name="email">
+```
+
+would need
+
+```html
+<input type="hidden" name="required" value="name,email">
+```
+
+and SSS will make sure these fields were sent from the form.
