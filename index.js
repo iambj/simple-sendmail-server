@@ -1,4 +1,4 @@
-/*
+/**
     TODO: 
         - more verbose error messages returned on the API (i.e sending failed because of invalidation) 
         - Support for loading multiple validation schemas
@@ -13,6 +13,7 @@ const queryString = require("querystring");
 const config = require("config");
 
 let SendMail = require("./sendmail");
+const { debug } = require("console");
 // spam
 // may be able to use the Set functions from ExecuteProgram
 // the intersect ones
@@ -23,7 +24,7 @@ let SendMail = require("./sendmail");
 
 const HOST = config.get("host");
 const PORT = config.get("port");
-const PROTOCOL = "http";
+const PROTOCOL = config.get("protocol");
 
 // Load from config
 /* 
@@ -54,7 +55,10 @@ const server = http.createServer(async (req, res) => {
     const reqInfo = {
         clientIP:
             req.headers["x-forwarded-for"] || req.connection.remoteAddress,
+        origin: req.headers.origin,
+        referer: req.headers.referer,
     };
+    console.log(reqInfo.origin);
     // console.dir(req);
     let baseURL = `${PROTOCOL}://${req.headers.host}/${
         req.params ? req.params : ""
@@ -197,11 +201,31 @@ const server = http.createServer(async (req, res) => {
 
                 // Finally send mail
             } else {
+                const pageTarget = config.get("thankYouPage");
+                const hostName = config.get("hostName");
+                const protocol = config.get("protocol");
+                let redirectHTML = `
+                <!DOCTYPE html>
+                <html lang="en">
+                <head>
+                    <meta charset="UTF-8"/>
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+                    <meta http-equiv="refresh" content="0; URL=${protocol}://${hostName}/${pageTarget}" />
+                </head>
+                <body>
+                    
+                </body>
+                </html>
+                
+                `;
+                res.setHeader("Content-Type", "text/html");
                 res.end(
-                    `${JSON.stringify({
-                        msg: "Email sent.",
-                        status: 200,
-                    })}`
+                    redirectHTML
+
+                    // `${JSON.stringify({
+                    //     msg: "Email sent!",
+                    //     status: 200,
+                    // })}`
                 );
             }
         });

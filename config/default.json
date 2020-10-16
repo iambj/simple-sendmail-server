@@ -1,7 +1,9 @@
 {
     "port": "3000",
     "host": "localhost",
-    "method": "http",
+    "protocol": "http",
+    "hostname": "pettinontheritz.com",
+    "hostName" : "localhost:8090",
     "fromAddress": "website@pettinontheritz.com",
     "toAddress": "iambj@icloud.com",
     "subject": "Email from the website.",
@@ -12,5 +14,6 @@
     "saveSpamMessages": true,
     "spamLogLocation": "./logs/spam",
     "useLanguageFilter": false,
-    "useThrottleBan": true
+    "useThrottleBan": true,
+    "thankYouPage": "thankyou.html"
 }
