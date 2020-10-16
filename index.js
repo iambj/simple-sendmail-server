@@ -13,10 +13,6 @@ const queryString = require("querystring");
 const config = require("config");
 
 let SendMail = require("./sendmail");
-const { debug } = require("console");
-// spam
-// may be able to use the Set functions from ExecuteProgram
-// the intersect ones
 
 // bad words
 
@@ -24,7 +20,7 @@ const { debug } = require("console");
 
 const HOST = config.get("host");
 const PORT = config.get("port");
-const PROTOCOL = config.get("protocol");
+const PROTOCOL = config.get("protocol"); // Note: there is no built-in support for SSL. Use a reverse proxy in front.
 
 // Load from config
 /* 
@@ -39,39 +35,34 @@ const PROTOCOL = config.get("protocol");
 const validationPaths = {
     basic: "validation/basic.js",
     phone: "validation/phone.js",
-    broken: "validation/b.js",
+    broken: "validation/broke.js",
 };
 
-// Chalk:
+// Chalk shorthands:
 const error = chalk.bold.red;
 const info = chalk.blue;
 
 const mail = new SendMail();
 
 // Start a server
-
 const server = http.createServer(async (req, res) => {
     // Build an object of useful info to pass along to modules.
     const reqInfo = {
         clientIP:
-            req.headers["x-forwarded-for"] || req.connection.remoteAddress,
-        origin: req.headers.origin,
+            req.headers["x-forwarded-for"] || req.connection.remoteAddress, // Requester's IP
         referer: req.headers.referer,
+        requestType: req.headers["content-type"], // Gett the request Content-Type
+        baseURL: `${PROTOCOL}://${req.headers.host}/${
+            req.params ? req.params : "" // Full base URL to which the request was sent to
+        }`,
     };
-    console.log(reqInfo.origin);
-    // console.dir(req);
-    let baseURL = `${PROTOCOL}://${req.headers.host}/${
-        req.params ? req.params : ""
-    }`;
-    // let path = url.parse(req.url, false);
-
-    let curURL = new URL(req.url, baseURL);
-
-    // console.log(curURL.search);
+    // Create a URL object for parsing (new Node way)
+    let curURL = new URL(req.url, reqInfo.baseURL);
 
     // NOTE: time is sent as 24 hour format. ("00:00") as string
     //       date is sent in reverse orders ("1990-07-15") as string
 
+    //! This will be taken out eventually.
     if (curURL.pathname === "/build" && req.method === "POST") {
         let body = "";
         let sent = false;
@@ -140,71 +131,93 @@ const server = http.createServer(async (req, res) => {
             body += chunk.toString();
         });
 
-        req.on("end", () => {
-            res.setHeader("Content-Type", "application/JSON");
-
-            // Did we get JSON from a JS Ajax request?
-            let json = {};
-            console.log(chalk`{blue ---- Trying JSON form data... ----}`);
-            try {
-                json = JSON.parse(body);
-                console.log(json);
-                console.log(
-                    chalk`{blue ---- JSON data received successfully. ----}`
-                );
-                // TODO: JSON next - collect body data then move on to sending
+        req.on("end", async () => {
+            if (reqInfo.requestType === "application/json") {
+                // Did we get JSON from a JS Ajax request?
+                let json = {};
+                console.log(chalk`{blue ---- Trying JSON form data... ----}`);
+                res.setHeader("Content-Type", "application/JSON");
+                try {
+                    json = JSON.parse(body);
+                    console.log(
+                        chalk`{blue ---- JSON data received successfully. ----}`
+                    );
+                } catch (e) {
+                    res.statusCode = 400;
+                    let error = new Error(e);
+                    console.log(
+                        chalk.red("---- Ill formed JSON received. ----")
+                    ); //LOGTHIS
+                    res.end(
+                        `${JSON.stringify({
+                            msg: "JSON data had errors",
+                            error: `${error}`,
+                            status: 400,
+                        })}`,
+                        400
+                    );
+                    console.log(error); //LOGTHIS
+                    return;
+                }
+                sent = await mail.buildEmail(json, reqInfo);
+                console.log({
+                    sent,
+                });
                 res.end(
                     `${JSON.stringify({
+                        msg: "Received data",
                         status: 200,
                     })}`
                 );
-                return; //! <-- <--
-            } catch (e) {
-                console.log(chalk.red("---- Ill formed JSON received. ----"));
-            }
-            // JSON couldn't be parsed, try to convert form data to an object, then JSON to send.
-            console.log(chalk`{blue ---- Trying regular form data... ----}`);
-            body = { ...queryString.parse(body) }; // Doesn't return a normal object so we spread it. Odd, but OK...
-            // Attempt to send mail
-            // Also validate all fields were sent
-            if (!body || Object.keys(body).length < 1) {
-                console.log(error`---- No data received. ----`);
+                return;
+            } else if (
+                reqInfo.requestType === "application/x-www-form-urlencoded"
+            ) {
+                // JSON couldn't be parsed, try to convert form data to an object, then JSON to send.
+                console.log(
+                    chalk`{blue ---- Trying regular form data... ----}`
+                );
+                body = { ...queryString.parse(body) }; // Doesn't return a normal object so we spread it. Odd, but OK...
+                // Attempt to send mail
+                // Also validate all fields were sent
+                if (!body || Object.keys(body).length < 1) {
+                    console.log(error`---- No data received. ----`);
+                    if (!sent) {
+                        res.end(
+                            `${JSON.stringify({
+                                msg:
+                                    "There was an issue with your request to send mail.",
+                                status: 400,
+                            })}`
+                        );
+                        return;
+                    }
+                }
+                // TODO: Default to some kind of validation, like basic.
+
+                if (body) {
+                    validData = validateBody(body);
+                }
+                // console.log(validData);
+                if (body && validData) {
+                    sent = mail.send(body);
+                }
                 if (!sent) {
+                    console.log(error`---- Can't send mail. Fatal error. ----`);
                     res.end(
                         `${JSON.stringify({
-                            msg:
-                                "There was an issue with your request to send mail.",
-                            status: 400,
+                            msg: "There was an issue sending mail.",
+                            status: 500,
                         })}`
                     );
                     return;
-                }
-            }
-            // TODO: Default to some kind of validation, like basic.
 
-            if (body) {
-                validData = validateBody(body);
-            }
-            // console.log(validData);
-            if (body && validData) {
-                sent = mail.send(body);
-            }
-            if (!sent) {
-                console.log(error`---- Can't send mail. Fatal error. ----`);
-                res.end(
-                    `${JSON.stringify({
-                        msg: "There was an issue sending mail.",
-                        status: 500,
-                    })}`
-                );
-                return;
-
-                // Finally send mail
-            } else {
-                const pageTarget = config.get("thankYouPage");
-                const hostName = config.get("hostName");
-                const protocol = config.get("protocol");
-                let redirectHTML = `
+                    // Finally send mail
+                } else {
+                    const pageTarget = config.get("thankYouPage");
+                    const hostName = config.get("hostName");
+                    const protocol = config.get("protocol");
+                    let redirectHTML = `
                 <!DOCTYPE html>
                 <html lang="en">
                 <head>
@@ -218,14 +231,14 @@ const server = http.createServer(async (req, res) => {
                 </html>
                 
                 `;
-                res.setHeader("Content-Type", "text/html");
+                    res.setHeader("Content-Type", "text/html");
+                    res.end(redirectHTML);
+                }
+            } else {
+                //LOGTHIS
+                res.statusCode = 400;
                 res.end(
-                    redirectHTML
-
-                    // `${JSON.stringify({
-                    //     msg: "Email sent!",
-                    //     status: 200,
-                    // })}`
+                    "Invalid request Content-Type. Expected: application/x-www-form-urlencoded or application/json"
                 );
             }
         });
@@ -242,10 +255,15 @@ const server = http.createServer(async (req, res) => {
         );
         return;
     } else {
-        // 404
-        console.log("404");
-
+        // No endpoint was found, just return a 404 JSON response.
+        // JSON is fine here as if a 404 were to occur, it would be the
+        // developers fault with the form or JSON request, not the user.
+        // If the server is down completely, the browser will show its
+        // own error and the user hopefully goes back for a form submission.
+        // If using JavaScript to send the for, which is recommended, a
+        // down host can be sort of detected and fail nicer for the user.
         res.setHeader("Content-Type", "application/JSON");
+        res.statusCode = 404;
         res.end(
             `${JSON.stringify({
                 msg: "Resource not found.",
@@ -316,8 +334,9 @@ function validateBody(rawData) {
 
     // If there is a required property, otherwise skip checking for required fields from submitted data
     if (data.required) {
-        let requiredFields = data.required.split(",");
+        let requiredFields = data.required.replace(" ", "").split(",");
         console.log("requiredFields", requiredFields);
+        // TODO: provide feedback for user
         return requiredFields.every(
             (field) => data.hasOwnProperty(field) && data[field] !== ""
         );
