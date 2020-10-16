@@ -28,9 +28,13 @@ This will be an open endpoint to send mail. Will need to make sure it's a real f
 
 This server is meant to be used inside of a closed network behind a firewall or behind a reverse proxy such as nginx. It does not implement the use of SSL or any transport layer security. The simplest use would be to allow your edge server to terminate any SSL connections and proxy the request to this mail server.
 
+Simple Sendmail Server (SSS) will provide a response congruent to the request it receives. If a JSON request is sent to it, it will respond with JSON. If data from a form is received, it will respond with HTML. The return HTML page is configurable in the config files by changing the `thankYouPage` setting. The value should be just the name of the HTML file to send the browser to (this is subject to change). NOTE: using JavaScript to send the form is the recommended method, with the browser sending the form as application data as a fail back if for some reason they have JS turned off. 
+
+
+
 ## Building your form
 
-For email to be sent and validated correctly certain hidden fields need to be set. Validation should of course be done on at the very least server side and preferably also on the front end for a better experience for the user. Simple Sendmail Server (SSS) will do basic validation if you provide these hidden fields. If invalid input is detected, sending will fail and send back an error. SSS was created for a simple website with no backend (such as Node or PHP) so simple validation was built in.
+For email to be sent and validated correctly certain hidden fields need to be set. Validation should of course be done, at the very least, server side before calling on SSS and preferably also on the front end for a better experience for the user.  SSS will do basic validation if you provide these hidden fields. If invalid input is detected, sending will fail and send back an error. SSS was created for a simple website with no backend (such as Node or PHP) so simple validation was built in.
 
 To denote fields that are required:
 
@@ -52,3 +56,11 @@ would need
 ```
 
 and SSS will make sure these fields were sent from the form.
+
+Validation can be done using another hidden field:
+
+```html
+<input type="hidden" name="validation" value="basic">
+```
+
+The "basic" value is setup with SSS and validates using JOI a name, email, phone number, and message field. To create a custom validation, create a JavaScript file in validation (or another location based on your config settings), and use JOI to create a validation schema. 
