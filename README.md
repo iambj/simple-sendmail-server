@@ -63,4 +63,56 @@ Validation can be done using another hidden field:
 <input type="hidden" name="validation" value="basic">
 ```
 
-The "basic" value is setup with SSS and validates using JOI a name, email, phone number, and message field. To create a custom validation, create a JavaScript file in validation (or another location based on your config settings), and use JOI to create a validation schema. 
+The "basic" value is setup with SSS and validates (using JOI ) a name, email, phone number, and message field, i.e. a basic contact form. To create a custom validation, create a JavaScript file in the validation folder (or another location based on your config settings), and use JOI to create a validation schema. 
+
+You can supply another hidden field `formDesc` which will be placed at the top of the emails generated:
+
+```html
+<input type="hidden" name="formDesc" value="This is an email from the Pettinontheritz.com contact form:">
+```
+
+For a complete example, a form like this:
+
+```html
+<form action="http://hostname.com/sendmails" method="post">
+    <fieldset>
+        <ul>
+            <li>
+                <label for="name">Name:</label>
+                <input id="name" name="name" type="text">
+            </li>
+            <li>
+                <label for="email">Email Address:</label>
+                <input id="email" name="email" type="email">   
+            </li>
+            <li>
+                <label for="phone">Phone Number:</label>
+                <input id="phone" name="phone" type="tel">
+            </li>
+            <li>
+                <label for="message">Message:</label>
+                <textarea name="message" id="message"></textarea>
+            </li>
+            <li>
+                <input type="submit" value="Submit">
+            </li>
+        </ul>
+        <input type="hidden" name="required" value="name,email,phone,message">
+        <input type="hidden" name="validation" value="basic">
+        <input type="hidden" name="formDesc" value="This is an email from the contact form:">
+    </fieldset>
+</form>
+```
+
+will generate an HTML (and a similar text) email like below:
+
+```
+This is an email from the contact form:
+
+    Name: Name
+    Email: email@domain.com
+    Phone: 111-111-1111
+    Message: This is my message
+```
+
+*Note: None of these hidden fields are required.* 
