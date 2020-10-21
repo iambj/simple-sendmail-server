@@ -3,3 +3,4 @@ testMail/
 logs/
 templates/
 builtEmails/
+config/local.json
