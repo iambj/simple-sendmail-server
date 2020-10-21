@@ -1,6 +1,6 @@
 # Simple Sendmail Server
 
-Run a small, basic server to sendmail from an HTML form without using a server side language to serve the page.
+Run a small, basic server to send mail from an HTML form without using a server side language to serve the page.
 
 ## Todo
 
@@ -114,7 +114,7 @@ This is an email from the contact form:
 
 SSS has default configuration settings already set. To modify them for production, modify `production.json` in the config folder.
 
-```json
+```json5
 {
     "port": "3000", // Default port for the server
     "host": "localhost", // Default hostname for the server. Most likely in production this should be 0.0.0.0, like it is already set in production.json
