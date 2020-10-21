@@ -12,12 +12,73 @@ const chalk = require("chalk");
 const queryString = require("querystring");
 const config = require("config");
 
-let SendMail = require("./sendmail");
+const fs = require("fs");
 
-// bad words
+const SendMail = require("./sendmail");
+
+// Winston logging
+// TODO: separate out
+const winston = require("winston");
+const {
+    combine,
+    timestamp,
+    label,
+    prettyPrint,
+    json,
+    simple,
+    printf,
+} = winston.format;
+
+const infoLogger = winston.createLogger({
+    level: "info",
+    format: combine(
+        timestamp(),
+        json()
+        // simple()
+        // prettyPrint()
+    ),
+    defaultMeta: { service: "main-server" },
+    transports: [
+        new winston.transports.File({
+            filename: "logs/info.log",
+        }),
+    ],
+});
+
+const accessLogger = winston.createLogger({
+    level: "info",
+    format: combine(
+        timestamp(),
+        // json()
+        simple()
+        // prettyPrint()
+    ),
+    // defaultMeta: { service: "main-server" },
+    transports: [
+        new winston.transports.File({
+            filename: "logs/access.log",
+        }),
+    ],
+});
+
+const myFormat = printf(({ level, message, label, timestamp }) => {
+    return `${level} | ${timestamp} | ${message}`;
+});
+
+// Add a console logger for dev mode.
+if (process.env.NODE_ENV !== "production") {
+    infoLogger.add(
+        new winston.transports.Console({
+            format: winston.format.combine(
+                winston.format.colorize(),
+                winston.format.simple(),
+                myFormat
+            ),
+        })
+    );
+}
 
 // Configurations
-
 const HOST = config.get("host");
 const PORT = config.get("port");
 const PROTOCOL = config.get("protocol"); // Note: there is no built-in support for SSL. Use a reverse proxy in front.
@@ -31,6 +92,7 @@ const PROTOCOL = config.get("protocol"); // Note: there is no built-in support f
 ?   .2 the type of path you use.
 ?   As of now, the folder with validation schemas must
 ?   reside in the root directory of the app and where it
+?   These should deff be absolute paths. Same as the config. ($NODE_CONFIG_DIR)
 */
 const validationPaths = {
     basic: "validation/basic.js",
@@ -43,6 +105,36 @@ const error = chalk.bold.red;
 const info = chalk.blue;
 
 const mail = new SendMail();
+
+// IP list in memory.
+let bannedIPs = []; // load from file
+fs.readFile("config/bannedIPs.json", "utf8", (err, data) => {
+    const ipList = JSON.parse(data).banned;
+    ipList.map((entry) => bannedIPs.push(entry.ip));
+    // console.log(bannedIPs);
+});
+
+let recentIPs = [];
+
+const recentIPRecycler = setInterval(
+    recycleIPs,
+    1000 * config.get("throttleBanReset")
+);
+
+function recycleIPs() {
+    recentIPs.forEach((ip, i) => {
+        if (Date.now() >= ip.date + 1000 * config.get("throttleBanReset")) {
+            console.log("remove", ip, i);
+            recentIPs.splice(i, 1);
+        }
+    });
+    console.log("Checking IPS", recentIPs);
+}
+
+// Add the IP to the recentIPs list
+function addToRecentIPs(ip) {
+    recentIPs.push({ ip, date: Date.now() });
+}
 
 // Start a server
 const server = http.createServer(async (req, res) => {
@@ -61,6 +153,44 @@ const server = http.createServer(async (req, res) => {
 
     // NOTE: time is sent as 24 hour format. ("00:00") as string
     //       date is sent in reverse orders ("1990-07-15") as string
+
+    // Check for banned and throttled IPs
+
+    if (bannedIPCheck(reqInfo.clientIP)) {
+        res.setHeader("Content-Type", "application/JSON");
+        res.statusCode = 403;
+        res.end(
+            `${JSON.stringify({
+                msg: "IP Banned",
+                status: 403,
+            })}`
+        );
+        accessLogger.info("Banned IP blocked.", {
+            code: 403,
+            route: "/status",
+            ip: reqInfo.clientIP,
+        });
+
+        return;
+    }
+    if (throttledIPCheck(reqInfo.clientIP)) {
+        res.setHeader("Content-Type", "application/JSON");
+        res.statusCode = 403;
+        res.end(
+            `${JSON.stringify({
+                msg: "IP is currently throttled. Try again later.",
+                status: 403,
+            })}`
+        );
+        accessLogger.info("Throttled IP blocked.", {
+            code: 403,
+            route: "/status",
+            ip: reqInfo.clientIP,
+        });
+
+        return;
+    }
+    addToRecentIPs(reqInfo.clientIP);
 
     //! This will be taken out eventually.
     if (curURL.pathname === "/build" && req.method === "POST") {
@@ -160,15 +290,18 @@ const server = http.createServer(async (req, res) => {
                     return;
                 }
                 sent = await mail.buildEmail(json, reqInfo);
-                console.log({
-                    sent,
-                });
-                res.end(
-                    `${JSON.stringify({
-                        msg: "Received data",
-                        status: 200,
-                    })}`
-                );
+                if (sent) {
+                    res.end(
+                        `${JSON.stringify({
+                            msg: "Received data",
+                            status: 200,
+                        })}`
+                    );
+                    accessLogger.info("Mail sent", {
+                        code: 200,
+                        route: "/sendmail",
+                    });
+                }
                 return;
             } else if (
                 reqInfo.requestType === "application/x-www-form-urlencoded"
@@ -200,7 +333,7 @@ const server = http.createServer(async (req, res) => {
                 }
                 // console.log(validData);
                 if (body && validData) {
-                    sent = mail.send(body);
+                    sent = await mail.buildEmail(body, reqInfo);
                 }
                 if (!sent) {
                     console.log(error`---- Can't send mail. Fatal error. ----`);
@@ -215,7 +348,7 @@ const server = http.createServer(async (req, res) => {
                     // Finally send mail
                 } else {
                     const pageTarget = config.get("thankYouPage");
-                    const hostName = config.get("hostName");
+                    const hostFQDN = config.get("hostFQDN");
                     const protocol = config.get("protocol");
                     let redirectHTML = `
                 <!DOCTYPE html>
@@ -223,14 +356,13 @@ const server = http.createServer(async (req, res) => {
                 <head>
                     <meta charset="UTF-8"/>
                     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-                    <meta http-equiv="refresh" content="0; URL=${protocol}://${hostName}/${pageTarget}" />
+                    <meta http-equiv="refresh" content="0; URL=${protocol}://${hostFQDN}/${pageTarget}" />
                 </head>
                 <body>
                     
                 </body>
                 </html>
-                
-                `;
+                `; // We could use a file for this but using string interpolation is just easier.
                     res.setHeader("Content-Type", "text/html");
                     res.end(redirectHTML);
                 }
@@ -247,6 +379,7 @@ const server = http.createServer(async (req, res) => {
     else if (curURL.pathname === "/status" && req.method === "GET") {
         console.log("Status check OK");
         res.setHeader("Content-Type", "application/JSON");
+        accessLogger.info("Server is up.", { code: 200, route: "/status" });
         res.end(
             `${JSON.stringify({
                 msg: "Server is up.",
@@ -282,6 +415,7 @@ server.listen(PORT, HOST, () => {
     console.log(
         chalk`{bold.white.bgBlue Server started on http://${HOST}:${PORT}}`
     );
+    infoLogger.info(`Server started on http://${HOST}:${PORT}`);
 });
 
 // Mail validations (all required fields)
@@ -344,4 +478,16 @@ function validateBody(rawData) {
     return true;
 }
 
-// Logging
+// Permanent ban check
+function bannedIPCheck(ip) {
+    return bannedIPs.includes(ip);
+    // console.log(ip, "banned", banned);
+}
+
+// Throttled IP check
+function throttledIPCheck(ip) {
+    let list = [];
+    recentIPs.map((entry) => list.push(entry.ip));
+    return list.includes(ip);
+    // console.log(ip, "banned", banned);
+}
