@@ -4,26 +4,30 @@ Run a small, basic server to send mail from an HTML form without using a server 
 
 ## Todo
 
--   [x] Use spam/profanity filters
+-   [x] Use spamassassin & spam/profanity filters
     -   "Click here if this is spam" in emails (on hold)
--   [ ] Use IP Geolocating - shouldn't need anyone from out of the country contacting
--   [ ] reCapcha (on hold)
--   [ ] IP banning
--   [ ] IP throttling
+-   [ ] Use IP Geolocating
+-   [ ] Form reCaptcha (on hold)
+-   [x] IP banning
+-   [x] IP throttling
 -   [ ] App token
 -   [x] Return an HTML page that will redirect to a "thank you page" for HTML for requests, otherwise, when using Ajax this isn't needed.
 -   [ ] Templating system for the email (on hold)
+-   [ ] Refactor some features out to modules
 
 ## Using the server
 
 This server is meant to be used inside of a closed network behind a firewall or behind a reverse proxy such as nginx. It does not implement the use of SSL or any transport layer security. The simplest use would be to allow your edge server to terminate any SSL connections and proxy the request to this mail server.
 
-Simple Sendmail Server (SSS) will provide a response congruent to the request it receives. If a JSON request is sent to it, it will respond with JSON. If data from a form is received, it will respond with HTML. The return HTML page is configurable in the config files by changing the `thankYouPage` setting. The value should be just the name of the HTML file to send the browser to (this is subject to change). NOTE: using JavaScript to send the form is the recommended method, with the browser sending the form as application data as a fail back if for some reason they have JS turned off.
+Simple Sendmail Server (SSS) will provide a response congruent to the request it receives. If a JSON request is sent to it, it will respond with JSON. If data from a form is received, it will respond with HTML. The return HTML page is configurable in the config files by changing the `thankYouPage` setting. The value should be just the name of the HTML file to send the browser to (this is subject to change). NOTE: using JavaScript to send the form is the recommended method, with the browser sending the form as application data as a fall back if for some reason the user has JS turned off.
 
 ## Security
 
-There are some features built in such as requiring an app token to be sent to the server from the form, IP throttling/banning, and GeoIP fencing. Spamassassin is also available but it will be up to the server administrator to train it for spam emails. A small list of profane and spammy words are included in the wordLists directory.
+There are some features built in such as requiring an app token to be sent to the server from the form, IP throttling/banning, and GeoIP fencing. Spamassassin is also available but it will be up to the server administrator to train it for spam emails (SA adds a minor delay to responding to requests). A small list of profane and spammy words are included in the wordLists directory.
 
+IPs can be manually banned by a system administrator by adding at least the IP as a JSON object to `config/bannedIPs.json`. A date and message can be useful for documentation purposes.
+
+IP throttling, if enabled, is automatic and will throttle IPs based on your settings. A 403 will be returned if they currently need to wait before sending another request. If an IP attempts to send an email too many times while throttled it will be added to `bannedIPs.json`. This is meant to mimic [fail2ban](https://www.fail2ban.org).
 
 ## Building your form
 
@@ -134,8 +138,14 @@ SSS has default configuration settings already set. To modify them for productio
     "languageFilterLevel": 4, // Threshold for which an email is considered spam. Messages with more flagged words than this setting is required to be blocked. (ie. > 4)
     "useThrottleBan": true, // Whether to enable throttle requests based on IP
     "throttleBanReset": 10, // Seconds after which an IP is removed and allowed to make a request again.
+    "throttleBanThreshold": 10, // Amount of attempts after a success that will result in a permanent ban while being throttled.
     "thankYouPage": "thankyou.html" // Page to redirect the user back to if data was submitted via form. This is concatenated to the hostFDQN so you will need to adjust for where this path resides for you.  
 }
 ```
 
 *Note: You should set up email security and DKIM for your domain and be sure to send from that domain. Otherwise emails may go to spam.*
+
+## TODO
+
+- Make setup easier for standalone and/or integration as an npm module into another project
+  - Most settings and setup are documented however things could be more streamlined 
