@@ -29,6 +29,8 @@ IPs can be manually banned by a system administrator by adding at least the IP a
 
 IP throttling, if enabled, is automatic and will throttle IPs based on your settings. A 403 will be returned if they currently need to wait before sending another request. If an IP attempts to send an email too many times while throttled it will be added to `bannedIPs.json`. This is meant to mimic [fail2ban](https://www.fail2ban.org).
 
+IP geolocation data is provided by [WhoisXMLAPI](https://whoisxmlapi.com). You will need to sign up for an account and use your API key if you would like to use this feature. A free account can be created which allows for 1,000 API calls a month. If no key or list of countries is provided, this security check will be skipped.
+
 ## Building your form
 
 For email to be sent and validated correctly certain hidden fields need to be set. Validation should of course be done, at the very least, server side before calling on SSS and preferably also on the front end for a better experience for the user.  SSS will do basic validation if you provide these hidden fields. If invalid input is detected, sending will fail and send back an error. SSS was created for a simple website with no backend (such as Node or PHP) so simple validation was built in.
@@ -139,7 +141,9 @@ SSS has default configuration settings already set. To modify them for productio
     "useThrottleBan": true, // Whether to enable throttle requests based on IP
     "throttleBanReset": 10, // Seconds after which an IP is removed and allowed to make a request again.
     "throttleBanThreshold": 10, // Amount of attempts after a success that will result in a permanent ban while being throttled.
-    "thankYouPage": "thankyou.html" // Page to redirect the user back to if data was submitted via form. This is concatenated to the hostFDQN so you will need to adjust for where this path resides for you.  
+    "thankYouPage": "thankyou.html", // Page to redirect the user back to if data was submitted via form. This is concatenated to the hostFDQN so you will need to adjust for where this path resides for you. 
+    "geoIPKey": "", // Your API key from whoisxmlapi.com 
+    "allowedCountries": "" // Comma separated list of country codes allowed
 }
 ```
 
@@ -148,4 +152,4 @@ SSS has default configuration settings already set. To modify them for productio
 ## TODO
 
 - Make setup easier for standalone and/or integration as an npm module into another project
-  - Most settings and setup are documented however things could be more streamlined 
+  - Most settings and setup are documented however things could be more streamlined
