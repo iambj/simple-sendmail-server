@@ -4,7 +4,6 @@
         - Support for loading multiple validation schemas
 
 */
-
 const http = require("http");
 const URL = require("url").URL;
 const path = require("path");
@@ -12,7 +11,18 @@ const chalk = require("chalk");
 const queryString = require("querystring");
 const config = require("config");
 
-const fs = require("fs");
+// If there is a key for the GeoIP service, enable checking IPs
+let geoIP = null;
+const GeoIPKey = config.get("geoIPKey");
+const allowedCountries = config
+    .get("allowedCountries")
+    .replace(" ", "")
+    .split(",");
+console.log(allowedCountries);
+if (GeoIPKey && allowedCountries.length >= 1) {
+    const GeoIP = require("simple-geoip");
+    geoIP = new GeoIP(GeoIPKey);
+}
 
 const SendMail = require("./sendmail");
 
@@ -44,6 +54,7 @@ const infoLogger = winston.createLogger({
         }),
     ],
 });
+winston.infoLogger = infoLogger; //! Provide this logger on winston for the time being
 
 const accessLogger = winston.createLogger({
     level: "info",
@@ -77,6 +88,10 @@ if (process.env.NODE_ENV !== "production") {
         })
     );
 }
+// End winston setup
+
+// Load the BanHammer!
+const BanHammer = require("./banHammer");
 
 // Configurations
 const HOST = config.get("host");
@@ -105,36 +120,7 @@ const error = chalk.bold.red;
 const info = chalk.blue;
 
 const mail = new SendMail();
-
-// IP list in memory.
-let bannedIPs = []; // load from file
-fs.readFile("config/bannedIPs.json", "utf8", (err, data) => {
-    const ipList = JSON.parse(data).banned;
-    ipList.map((entry) => bannedIPs.push(entry.ip));
-    // console.log(bannedIPs);
-});
-
-let recentIPs = [];
-
-const recentIPRecycler = setInterval(
-    recycleIPs,
-    1000 * config.get("throttleBanReset")
-);
-
-function recycleIPs() {
-    recentIPs.forEach((ip, i) => {
-        if (Date.now() >= ip.date + 1000 * config.get("throttleBanReset")) {
-            console.log("remove", ip, i);
-            recentIPs.splice(i, 1);
-        }
-    });
-    console.log("Checking IPS", recentIPs);
-}
-
-// Add the IP to the recentIPs list
-function addToRecentIPs(ip) {
-    recentIPs.push({ ip, date: Date.now() });
-}
+const bh = new BanHammer();
 
 // Start a server
 const server = http.createServer(async (req, res) => {
@@ -154,9 +140,11 @@ const server = http.createServer(async (req, res) => {
     // NOTE: time is sent as 24 hour format. ("00:00") as string
     //       date is sent in reverse orders ("1990-07-15") as string
 
-    // Check for banned and throttled IPs
+    // TODO: Move these checks to routes that actually do something. ie. /sendmail
+    // Checking the status is benign.
 
-    if (bannedIPCheck(reqInfo.clientIP)) {
+    // Check for banned and throttled IPs
+    if (bh.bannedIPCheck(reqInfo.clientIP)) {
         res.setHeader("Content-Type", "application/JSON");
         res.statusCode = 403;
         res.end(
@@ -173,12 +161,15 @@ const server = http.createServer(async (req, res) => {
 
         return;
     }
-    if (throttledIPCheck(reqInfo.clientIP)) {
+    if (bh.throttledIPCheck(reqInfo.clientIP)) {
+        bh.addToRecentIPs(reqInfo.clientIP);
         res.setHeader("Content-Type", "application/JSON");
         res.statusCode = 403;
         res.end(
             `${JSON.stringify({
-                msg: "IP is currently throttled. Try again later.",
+                msg: `IP is currently throttled. Try again after ${config.get(
+                    "throttleBanReset"
+                )} seconds.`,
                 status: 403,
             })}`
         );
@@ -190,69 +181,36 @@ const server = http.createServer(async (req, res) => {
 
         return;
     }
-    addToRecentIPs(reqInfo.clientIP);
+    bh.addToRecentIPs(reqInfo.clientIP);
+    // Check for bad IPs with Geolocation
+    // Check for banned IPs above first to save API calls.
 
-    //! This will be taken out eventually.
-    if (curURL.pathname === "/build" && req.method === "POST") {
-        let body = "";
-        let sent = false;
-        let validData = true; // Start true because the form can omit the required field. If so, no validation is needed here.
-        req.on("data", (chunk) => {
-            // console.log(chunk.toString());
-            body += chunk.toString();
-        });
-        req.on("end", async () => {
-            res.setHeader("Content-Type", "application/JSON");
-            console.log(chalk`{blue ---- Trying regular form data... ----}`);
-            body = { ...queryString.parse(body) }; // Doesn't return a normal object so we spread it. Odd, but OK...
-            // Attempt to send mail
-            // Also validate all fields were sent
-            if (!body || Object.keys(body).length < 1) {
-                console.log(error`---- No data received. ----`);
-                if (!sent) {
-                    res.end(
-                        `${JSON.stringify({
-                            msg:
-                                "There was an issue with your request to send mail.",
-                            status: 400,
-                        })}`
-                    );
+    if (curURL.pathname === "/sendmail" && req.method === "POST") {
+        // returns a 400 and a json object with error :"cannot resolve hostname to an IP address"
+        // 402 Payment Required
+        if (reqInfo.clientIP !== "127.0.0.2") {
+            // reqInfo.clientIP = "221.2.2.212";
+            reqInfo.clientIP = "64.121.131.36";
+            geoIP.lookup(reqInfo.clientIP, (err, data) => {
+                if (err) {
+                    console.log(err.statusCode);
+                    // console.log(data);
                     return;
+                    // throw err;
                 }
-            }
-            // TODO: Default to some kind of validation, like basic.
-
-            // if (body) {
-            //     validData = validateBody(body);
-            // }
-            // console.log(validData);
-            // if (body && validData) {
-            sent = await mail.buildEmail(body, reqInfo);
-            console.log({ sent });
-            // }
-            if (!sent) {
-                console.log(error`---- Can't send mail. Fatal error. ----`);
-                res.end(
-                    `${JSON.stringify({
-                        msg: "There was an issue sending mail.",
-                        // err: sent.err,
-                        status: 500,
-                    })}`
-                );
-                return;
-
-                // Finally send mail
-            } else {
-                res.end(
-                    `${JSON.stringify({
-                        msg: "Email sent.",
-                        status: 200,
-                    })}`
-                );
-                return;
-            }
-        });
-    } else if (curURL.pathname === "/sendmail" && req.method === "POST") {
+                console.log(data.location, allowedCountries);
+                if (allowedCountries.includes(data.location.country)) {
+                    console.log("allowed");
+                } else {
+                    // console.log("ip", reqInfo.clientIP);
+                    bh.banIP({
+                        ip: reqInfo.clientIP,
+                        reason: "IP geolocation blocked",
+                    });
+                    // TODO send response to user, log with winston
+                }
+            });
+        }
         let body = "";
         let sent = false;
         let validData = true; // Start true because the form can omit the required field. If so, no validation is needed here.
@@ -301,6 +259,15 @@ const server = http.createServer(async (req, res) => {
                         code: 200,
                         route: "/sendmail",
                     });
+                } else {
+                    console.log(error`---- Can't send mail. Fatal error. ----`);
+                    res.end(
+                        `${JSON.stringify({
+                            msg: "There was an issue sending mail.",
+                            status: 500,
+                        })}`
+                    );
+                    return;
                 }
                 return;
             } else if (
@@ -335,6 +302,7 @@ const server = http.createServer(async (req, res) => {
                 if (body && validData) {
                     sent = await mail.buildEmail(body, reqInfo);
                 }
+                console.log(sent);
                 if (!sent) {
                     console.log(error`---- Can't send mail. Fatal error. ----`);
                     res.end(
@@ -379,7 +347,11 @@ const server = http.createServer(async (req, res) => {
     else if (curURL.pathname === "/status" && req.method === "GET") {
         console.log("Status check OK");
         res.setHeader("Content-Type", "application/JSON");
-        accessLogger.info("Server is up.", { code: 200, route: "/status" });
+        accessLogger.info("Server is up.", {
+            code: 200,
+            route: "/status",
+            from: reqInfo.clientIP,
+        });
         res.end(
             `${JSON.stringify({
                 msg: "Server is up.",
@@ -411,7 +383,7 @@ server.on("clientError", (err, socket) => {
     socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
 });
 
-server.listen(PORT, HOST, () => {
+const appServer = server.listen(PORT, HOST, () => {
     console.log(
         chalk`{bold.white.bgBlue Server started on http://${HOST}:${PORT}}`
     );
@@ -478,16 +450,4 @@ function validateBody(rawData) {
     return true;
 }
 
-// Permanent ban check
-function bannedIPCheck(ip) {
-    return bannedIPs.includes(ip);
-    // console.log(ip, "banned", banned);
-}
-
-// Throttled IP check
-function throttledIPCheck(ip) {
-    let list = [];
-    recentIPs.map((entry) => list.push(entry.ip));
-    return list.includes(ip);
-    // console.log(ip, "banned", banned);
-}
+module.exports = appServer;
