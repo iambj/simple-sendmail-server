@@ -11,19 +11,6 @@ const chalk = require("chalk");
 const queryString = require("querystring");
 const config = require("config");
 
-// If there is a key for the GeoIP service, enable checking IPs
-let geoIP = null;
-const GeoIPKey = config.get("geoIPKey");
-const allowedCountries = config
-    .get("allowedCountries")
-    .replace(" ", "")
-    .split(",");
-console.log(allowedCountries);
-if (GeoIPKey && allowedCountries.length >= 1) {
-    const GeoIP = require("simple-geoip");
-    geoIP = new GeoIP(GeoIPKey);
-}
-
 const SendMail = require("./sendmail");
 
 // Winston logging
@@ -109,11 +96,11 @@ const PROTOCOL = config.get("protocol"); // Note: there is no built-in support f
 ?   reside in the root directory of the app and where it
 ?   These should deff be absolute paths. Same as the config. ($NODE_CONFIG_DIR)
 */
-const validationPaths = {
-    basic: "validation/basic.js",
-    phone: "validation/phone.js",
-    broken: "validation/broke.js",
-};
+// const validationPaths = {
+//     basic: "validation/basic.js",
+//     phone: "validation/phone.js",
+//     broken: "validation/broke.js",
+// };
 
 // Chalk shorthands:
 const error = chalk.bold.red;
@@ -133,6 +120,7 @@ const server = http.createServer(async (req, res) => {
         baseURL: `${PROTOCOL}://${req.headers.host}/${
             req.params ? req.params : "" // Full base URL to which the request was sent to
         }`,
+        params: req.params,
     };
     // Create a URL object for parsing (new Node way)
     let curURL = new URL(req.url, reqInfo.baseURL);
@@ -155,7 +143,7 @@ const server = http.createServer(async (req, res) => {
         );
         accessLogger.info("Banned IP blocked.", {
             code: 403,
-            route: "/status",
+            route: curURL.pathname,
             ip: reqInfo.clientIP,
         });
 
@@ -178,7 +166,6 @@ const server = http.createServer(async (req, res) => {
             route: "/status",
             ip: reqInfo.clientIP,
         });
-
         return;
     }
     bh.addToRecentIPs(reqInfo.clientIP);
@@ -186,31 +173,6 @@ const server = http.createServer(async (req, res) => {
     // Check for banned IPs above first to save API calls.
 
     if (curURL.pathname === "/sendmail" && req.method === "POST") {
-        // returns a 400 and a json object with error :"cannot resolve hostname to an IP address"
-        // 402 Payment Required
-        if (reqInfo.clientIP !== "127.0.0.2") {
-            // reqInfo.clientIP = "221.2.2.212";
-            reqInfo.clientIP = "64.121.131.36";
-            geoIP.lookup(reqInfo.clientIP, (err, data) => {
-                if (err) {
-                    console.log(err.statusCode);
-                    // console.log(data);
-                    return;
-                    // throw err;
-                }
-                console.log(data.location, allowedCountries);
-                if (allowedCountries.includes(data.location.country)) {
-                    console.log("allowed");
-                } else {
-                    // console.log("ip", reqInfo.clientIP);
-                    bh.banIP({
-                        ip: reqInfo.clientIP,
-                        reason: "IP geolocation blocked",
-                    });
-                    // TODO send response to user, log with winston
-                }
-            });
-        }
         let body = "";
         let sent = false;
         let validData = true; // Start true because the form can omit the required field. If so, no validation is needed here.
@@ -220,6 +182,23 @@ const server = http.createServer(async (req, res) => {
         });
 
         req.on("end", async () => {
+            let locAllowed = await bh.checkGeoIP(reqInfo);
+            console.log({ locAllowed });
+            if (!locAllowed) {
+                res.setHeader("Content-Type", "application/JSON");
+                res.statusCode = 500;
+                res.end(
+                    `${JSON.stringify({
+                        msg: "An error has occurred.",
+                        status: 500,
+                    })}`,
+                    500
+                );
+                return;
+            }
+            if (locAllowed.APICheck) {
+                console.log(locAllowed.APICheck);
+            }
             if (reqInfo.requestType === "application/json") {
                 // Did we get JSON from a JS Ajax request?
                 let json = {};
@@ -251,7 +230,7 @@ const server = http.createServer(async (req, res) => {
                 if (sent) {
                     res.end(
                         `${JSON.stringify({
-                            msg: "Received data",
+                            msg: "Received data and mail sent",
                             status: 200,
                         })}`
                     );
@@ -398,11 +377,13 @@ function validateBody(rawData) {
     console.log(chalk`{yellow ---- Begin Validating data ----}`);
     // If a validation schema was sent with the form
     let data = {};
+    const validationPaths = config.get("validation");
+    console.log("valid", validationPaths);
     for (const [key, val] of Object.entries(rawData)) {
         data[key] = val.trim();
     }
 
-    console.log(data);
+    // console.log(data);
     if (data.validation) {
         // Get name passed from the form
         // This should match with one in the config.
