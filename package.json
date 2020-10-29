@@ -3,8 +3,19 @@
     "version": "0.0.1",
     "description": "Run a small, basic server to sendmail from an HTML form without using a server side language to serve the page.",
     "main": "index.js",
+    "jest": {
+        "watchPathIgnorePatterns": [
+            ".json",
+            "config",
+            "<rootDir>/node_modules",
+            "<rootDir>/logs",
+            "<rootDir>/coverage"
+        ]
+    },
     "scripts": {
-        "test": "jest --watchAll --verbose --coverage"
+        "test:ava": "ava",
+        "test": "NODE_ENV=test jest --watch --verbose --coverage",
+        "start": "nodemon --ignore './logs' --ignore './config'"
     },
     "repository": {
         "type": "git",
@@ -12,11 +23,9 @@
     },
     "keywords": [
         "email",
-        "email",
-        "server",
+        "email server",
         "sendmail",
-        "form",
-        "email"
+        "form email"
     ],
     "author": "Brandon Johnson",
     "license": "MIT",
@@ -25,11 +34,17 @@
     },
     "homepage": "https://github.com/iambj/simple-sendmail-server#readme",
     "dependencies": {
+        "axios": "^0.21.0",
         "chalk": "^4.1.0",
         "config": "^3.3.2",
-        "joi": "^17.2.1",
-        "nodemailer": "^6.4.11",
+        "joi": "^17.3.0",
+        "lowdb": "^1.0.0",
+        "nodemailer": "^6.4.14",
         "winston": "^3.3.3"
     },
-    "devDependencies": {}
+    "devDependencies": {
+        "ava": "^3.13.0",
+        "jest": "^26.6.1",
+        "supertest": "^5.0.0"
+    }
 }
