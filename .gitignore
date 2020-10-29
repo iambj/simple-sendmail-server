@@ -4,3 +4,7 @@ logs/
 templates/
 builtEmails/
 config/local.json
+config/local-test.json
+config/bannedIPs.json
+scrap.js
+coverage/
