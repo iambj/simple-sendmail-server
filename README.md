@@ -142,8 +142,8 @@ SSS has default configuration settings already set. To modify them for productio
     "throttleBanReset": 10, // Seconds after which an IP is removed and allowed to make a request again.
     "throttleBanThreshold": 10, // Amount of attempts after a success that will result in a permanent ban while being throttled.
     "thankYouPage": "thankyou.html", // Page to redirect the user back to if data was submitted via form. This is concatenated to the hostFDQN so you will need to adjust for where this path resides for you. 
-    "geoIPKey": "", // Your API key from whoisxmlapi.com 
-    "allowedCountries": "" // Comma separated list of country codes allowed
+    "geoIPKey": "", // Your API key from whoisxmlapi.com
+    "allowedCountries": [] // Array of allowed countries
 }
 ```
 
