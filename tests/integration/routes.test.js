@@ -15,8 +15,6 @@ const adaptor = new FileSync(
 );
 const db = lowdb(adaptor);
 
-console.log(config.get("throttleBanReset"));
-
 let server;
 describe("main routes", () => {
     beforeEach(() => {
@@ -25,6 +23,7 @@ describe("main routes", () => {
 
     afterEach(() => {
         server.close();
+        db.set("banned", []).write();
     });
 
     describe("GET /status", () => {
@@ -40,19 +39,20 @@ describe("main routes", () => {
             );
             expect(res.status).toBe(403);
         });
-        // it("should fail because the IP is banned.", () => {
-        //     let res;
-        //     let run = async function () {
-        //         for (let i = 0; i <= config.get("throttleBanReset") - 2; i++) {
-        //             console.log("requesting");
-        //             res = await request(server).get("/status");
-        //         }
-        //         console.log(res.body.msg);
-        //         expect(res.body.msg).toContain("IP Banned");
-        //         expect(res.status).toBe(403);
-        //     };
-        //     run();
-        // });
+        it("should fail because the IP is banned.", async () => {
+            let res;
+            res = await request(server).get("/status");
+            res = await request(server).get("/status");
+            // let run = async function () {
+            //     for (let i = 0; i <= config.get("throttleBanThreshold"); i++) {
+            //         console.log("requesting");
+            //     }
+            //     console.log(res.body.msg);
+            // };
+            // await run();
+            expect(res.body.msg).toContain("IP Banned");
+            expect(res.status).toBe(403);
+        });
         // Test for banning/
         // On tear down and up should use a fake banned IP list
     });
