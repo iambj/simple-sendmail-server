@@ -1,6 +1,8 @@
 const nodemailer = require("nodemailer");
 const MailComposer = require("nodemailer/lib/mail-composer");
 
+const wordFilter = require("./wordFilter");
+
 const fs = require("fs");
 const { resolve } = require("path");
 
@@ -29,7 +31,7 @@ module.exports = class SendMail {
         console.log(chalk`{bold.white.bgBlue ----Sendmail loaded----}`);
         this.transporter = nodemailer.createTransport({
             sendmail: true,
-            newline: "unix",
+            // newline: "unix",
             path: "/usr/sbin/sendmail",
         });
     }
@@ -38,7 +40,17 @@ module.exports = class SendMail {
         console.log(chalk`{green.bold ---- Mail sent. ----}`);
         console.log(data);
         console.log(chalk`{green.bold -------------------}`);
-        return true;
+
+        const htmlText = JSON.stringify(data);
+
+        const fileName = Date.now();
+        fs.writeFile(`./builtEmails/${fileName}.txt`, htmlText, (err) => {
+            if (!err) {
+                return true;
+            } else {
+                console.log("Error writing fake email.", err);
+            }
+        });
     }
 
     sendReal(message) {
@@ -66,14 +78,38 @@ module.exports = class SendMail {
          * @param {object} data
          * @return {string} Text version of a JS object of email data
          */
+        const newData = { ...data };
+        let parsedData = "";
+        if (newData["formDesc"]) {
+            parsedData += newData["formDesc"] + "\n";
+            delete newData.formDesc;
+        }
+        Object.keys(newData).forEach((i) => {
+            parsedData += `${i.charAt(0).toUpperCase() + i.slice(1)}: ${
+                newData[i]
+            }\n`;
+        });
 
-        // console.log(data);
-
-        return JSON.stringify(data);
+        let textMessage = parsedData;
+        // console.log(textMessage);
+        return textMessage;
     }
 
-    buildHTMLVersion() {
-        return "html";
+    buildHTMLVersion(data) {
+        const newData = { ...data };
+        let htmlMessage = "";
+        if (newData["formDesc"]) {
+            htmlMessage += `<b>${newData["formDesc"]}</b><br/>`;
+            delete newData.formDesc;
+        }
+        htmlMessage += "<ul>";
+        Object.keys(newData).forEach((i) => {
+            htmlMessage += `<li><b>${
+                i.charAt(0).toUpperCase() + i.slice(1)
+            }:</b> ${newData[i]}</li>`;
+        });
+        htmlMessage += "</ul>";
+        return htmlMessage;
     }
 
     async buildEmail(data, reqInfo) {
@@ -82,11 +118,20 @@ module.exports = class SendMail {
          * @param {object} reqInfo Information from the server about the request. It is used for logging the IP for spam purposes here.
          */
 
+        // Language/word filters
+        let langCheck = wordFilter.checkList(JSON.stringify(data));
+        if (langCheck) {
+            console.log("langcheck", langCheck);
+            return false;
+        }
+
+        // console.log(JSON.stringify(data));
+
         const options = {
             from: config.get("fromAddress"),
             to: config.get("toAddress"),
             subject: config.get("subject"),
-            text: "This is a message " + this.buildTextVersion(data),
+            text: this.buildTextVersion(data),
             html: this.buildHTMLVersion(data),
         };
         let mail = new MailComposer(options);
@@ -107,7 +152,7 @@ module.exports = class SendMail {
         // Not checking for spam, send on build message to transport
         // console.log({ options });
         if (!isSpam) {
-            this.sendReal(options);
+            this.send(options);
             return true;
         } else {
             return false;
@@ -138,6 +183,7 @@ module.exports = class SendMail {
         });
 
         // Should we hold onto spam for analysis?
+        console.log(spam, fileName);
         if (!spam || !config.get("saveSpamMessages")) {
             fs.unlink(fileName, (err) => {
                 console.log("deleting non spam email");
