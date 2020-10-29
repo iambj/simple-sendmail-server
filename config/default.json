@@ -2,18 +2,24 @@
     "port": "3000",
     "host": "localhost",
     "protocol": "http",
-    "hostname": "pettinontheritz.com",
-    "hostName" : "localhost:8090",
-    "fromAddress": "website@pettinontheritz.com",
-    "toAddress": "iambj@icloud.com",
+    "hostFQDN": "website.com",
+    "fromAddress": "from@website.com",
+    "toAddress": "to@email.com",
     "subject": "Email from the website.",
     "validation": {
         "basic": "validation/basic.js"
     },
-    "useSpamCheck": true,
-    "saveSpamMessages": true,
+    "useSpamCheck": false,
+    "saveSpamMessages": false,
     "spamLogLocation": "./logs/spam",
-    "useLanguageFilter": false,
+    "useLanguageFilter": true,
+    "useSpamWordFilter": true,
+    "languageFilterLevel": 4,
     "useThrottleBan": true,
-    "thankYouPage": "thankyou.html"
+    "throttleBanReset": 10,
+    "throttleBanThreshold": 10,
+    "userGeoIPCheck": true,
+    "thankYouPage": "thankyou.html",
+    "geoIPKey": "",
+    "allowedCountries": []
 }
