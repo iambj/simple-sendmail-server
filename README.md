@@ -6,7 +6,7 @@ Run a small, basic server to send mail from an HTML form without using a server 
 
 -   [x] Use spamassassin & spam/profanity filters
     -   "Click here if this is spam" in emails (on hold)
--   [ ] Use IP Geolocating
+-   [X] Use IP Geolocating
 -   [ ] Form reCaptcha (on hold)
 -   [x] IP banning
 -   [x] IP throttling
