@@ -4,6 +4,7 @@
     "description": "Run a small, basic server to sendmail from an HTML form without using a server side language to serve the page.",
     "main": "index.js",
     "jest": {
+        "collectCoverage": true,
         "watchPathIgnorePatterns": [
             ".json",
             "config",
@@ -15,6 +16,7 @@
     "scripts": {
         "test:ava": "ava",
         "test": "NODE_ENV=test jest --watch --verbose --coverage",
+        "testAll": "NODE_ENV=test jest --watchAll --verbose --coverage",
         "start": "nodemon --ignore './logs' --ignore './config'"
     },
     "repository": {
@@ -43,8 +45,8 @@
         "winston": "^3.3.3"
     },
     "devDependencies": {
-        "ava": "^3.13.0",
         "jest": "^26.6.1",
+        "jsdoc": "^3.6.6",
         "supertest": "^5.0.0"
     }
 }
