@@ -1,9 +1,8 @@
-const fs = require("fs");
 const config = require("config");
 const { infoLogger } = require("winston");
+
 const lowdb = require("lowdb");
 const FileSync = require("lowdb/adapters/FileSync");
-
 const adaptor = new FileSync("./config/bannedIPs.json");
 const db = lowdb(adaptor);
 
@@ -45,10 +44,6 @@ const accessLogger = winston.createLogger({
     ],
 });
 
-const myFormat = printf(({ level, message, label, timestamp }) => {
-    return `${level} | ${timestamp} | ${message}`;
-});
-
 module.exports = class BanHammer {
     constructor() {
         db.defaults({
@@ -74,7 +69,6 @@ module.exports = class BanHammer {
     banIP(ip) {
         let banned = { ...ip };
         banned.date = Date.now();
-        console.log(ip);
         this.bannedIPs.push(banned);
         db.get("banned.").push(banned).write();
     }
@@ -105,8 +99,6 @@ module.exports = class BanHammer {
 
     // Permanent ban check
     bannedIPCheck(ip) {
-        // console.log(this.bannedIPs);
-        // console.log(this.bannedIPs, ip);
         return this.bannedIPs.filter((banned) => banned.ip === ip).length;
     }
 
@@ -139,7 +131,6 @@ module.exports = class BanHammer {
          *  passing value by returning a non-null value with an error.
          */
         if (geoIP && reqInfo.clientIP !== "127.0.0.1") {
-            console.log("checking ip location", reqInfo.clientIP);
             try {
                 let url =
                     geoIPLookUpURL +
