@@ -4,16 +4,16 @@ Run a small, basic server to send mail from an HTML form without using a server 
 
 ## Todo
 
--   [x] Use spamassassin & spam/profanity filters
-    -   "Click here if this is spam" in emails (on hold)
--   [X] Use IP Geolocating
--   [ ] Form reCaptcha (on hold)
--   [x] IP banning
--   [x] IP throttling
--   [ ] App token
--   [x] Return an HTML page that will redirect to a "thank you page" for HTML for requests, otherwise, when using Ajax this isn't needed.
--   [ ] Templating system for the email (on hold)
--   [ ] Refactor some features out to modules
+- [x] Use spamassassin & spam/profanity filters
+  - "Click here if this is spam" in emails (on hold)
+- [X] Use IP Geolocating
+- [ ] Form reCaptcha (on hold)
+- [x] IP banning
+- [x] IP throttling
+- [ ] App token
+- [x] Return an HTML page that will redirect to a "thank you page" for HTML for requests, otherwise, when using Ajax this isn't needed.
+- [ ] Templating system for the email (on hold)
+- [ ] Refactor some features out to modules
 
 ## Using the server
 
@@ -62,7 +62,7 @@ Validation can be done using another hidden field:
 <input type="hidden" name="validation" value="basic">
 ```
 
-The "basic" value is setup with SSS and validates (using JOI ) a name, email, phone number, and message field, i.e. a basic contact form. To create a custom validation, create a JavaScript file in the validation folder (or another location based on your config settings), and use JOI to create a validation schema. 
+The "basic" value is setup with SSS and validates (using JOI ) a name, email, phone number, and message field, i.e. a basic contact form. To create a custom validation, create a JavaScript file in the validation folder (or another location based on your config settings), and use JOI to create a validation schema.
 
 You can supply another hidden field `formDesc` which will be placed at the top of the emails generated:
 
@@ -82,7 +82,7 @@ For a complete example, a form like this:
             </li>
             <li>
                 <label for="email">Email Address:</label>
-                <input id="email" name="email" type="email">   
+                <input id="email" name="email" type="email">
             </li>
             <li>
                 <label for="phone">Phone Number:</label>
@@ -105,7 +105,7 @@ For a complete example, a form like this:
 
 will generate an HTML (and a similar text) email like below:
 
-```
+```text
 This is an email from the contact form:
 
     Name: Name
@@ -141,7 +141,7 @@ SSS has default configuration settings already set. To modify them for productio
     "useThrottleBan": true, // Whether to enable throttle requests based on IP
     "throttleBanReset": 10, // Seconds after which an IP is removed and allowed to make a request again.
     "throttleBanThreshold": 10, // Amount of attempts after a success that will result in a permanent ban while being throttled.
-    "thankYouPage": "thankyou.html", // Page to redirect the user back to if data was submitted via form. This is concatenated to the hostFDQN so you will need to adjust for where this path resides for you. 
+    "thankYouPage": "thankyou.html", // Page to redirect the user back to if data was submitted via form. This is concatenated to the hostFQDN so you will need to adjust for where this path resides for you.
     "geoIPKey": "", // Your API key from whoisxmlapi.com
     "allowedCountries": [] // Array of allowed countries
 }
@@ -152,4 +152,4 @@ SSS has default configuration settings already set. To modify them for productio
 ## TODO
 
 - Make setup easier for standalone and/or integration as an npm module into another project
-  - Most settings and setup are documented however things could be more streamlined
+  - Most settings and setup are documented, however things could be more streamlined
